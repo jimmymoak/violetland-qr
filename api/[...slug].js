@@ -1,20 +1,19 @@
-// api/[...slug].js   — runs at Vercel Edge (no server to manage)
-export const config = { runtime: 'edge' };
+// app/[[...slug]]/route.js      ← create or overwrite
+export const runtime = 'edge';
 
-export default async function handler(request) {
-  const url  = new URL(request.url);
-  const slug = url.pathname.replace(/^\/api\//, '') || 'home';
+export async function GET(request, { params }) {
+  const slug = params.slug?.join('/') || 'home';
+  const ip   = request.headers.get('x-forwarded-for') || 'unknown';
+  const now  = new Date().toISOString();
 
-  /* 1️⃣  Tiny scan log — stores "slug:timestamp → IP" in a free KV endpoint */
-  const ip  = request.headers.get('x-forwarded-for') || 'unknown';
-  const now = new Date().toISOString();
+  /* 1️⃣  Log scan */
   fetch('https://v0.api.vercel-kv.com/set', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ key: `${slug}:${now}`, val: ip })
   }).catch(()=>{});
 
-  /* 2️⃣  Optional instant push  (add WEBHOOK_URL later in Vercel Settings) */
+  /* 2️⃣  Optional SMS / push */
   if (process.env.WEBHOOK_URL) {
     fetch(process.env.WEBHOOK_URL, {
       method: 'POST',
@@ -22,8 +21,7 @@ export default async function handler(request) {
     }).catch(()=>{});
   }
 
-  /* 3️⃣  Redirect the visitor */
-  const destBase = process.env.DEST_BASE
-        || 'https://violetland.com/explainer?ref=';
-  return Response.redirect(destBase + slug, 307);
+  /* 3️⃣  Redirect — pulled from ENV so you can switch hosts later */
+  const dest = process.env.DEST_URL || 'https://violetland.com';
+  return Response.redirect(dest, 307);
 }
