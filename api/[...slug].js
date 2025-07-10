@@ -1,32 +1,30 @@
-// api/[...slug].js  — Edge Function
+// api/[...slug].js
 export const config = { runtime: 'edge' };
 
 export default async function handler(req) {
-  const slug = new URL(req.url).pathname.replace(/^\/api\//, '') || 'home';
+  const path = new URL(req.url).pathname.replace(/^\/api\//, '');
+  if (path.startsWith('favicon')) {
+    // serve a 204 No Content so the browser stops asking
+    return new Response(null, { status: 204 });
+  }
 
-  // 1️⃣  Redirect first (never fails)
-  const response = Response.redirect(
-    (process.env.DEST_URL || 'https://violetland.com'),
-    307
-  );
-
-  // 2️⃣  Fire-and-forget logging
   const ip  = req.headers.get('x-forwarded-for') || 'unknown';
   const now = new Date().toISOString();
 
+  /* log & notify (unchanged) */
   fetch('https://v0.api.vercel-kv.com/set', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ key: `${slug}:${now}`, val: ip })
+    body: JSON.stringify({ key: `${path}:${now}`, val: ip })
   }).catch(() => {});
 
   if (process.env.WEBHOOK_URL) {
     fetch(process.env.WEBHOOK_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ value1: slug, value2: now, value3: ip })
+      body: JSON.stringify({ value1: path, value2: now, value3: ip })
     }).catch(() => {});
   }
 
-  return response;
+  return Response.redirect(process.env.DEST_URL || 'https://violetland.com', 307);
 }
