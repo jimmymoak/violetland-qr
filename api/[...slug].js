@@ -20,17 +20,21 @@ export default async function handler(req) {
     body:   JSON.stringify({ key: `${slug}:${now}`, val: ip })
   }).catch(() => {});
 
-  // ── 4. Fire-and-forget: Textbelt SMS ───────────────────────────
-  if (process.env.TEXTBELT_KEY) {
-    fetch("https://textbelt.com/text", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+  // 4️⃣  ClickSend SMS (fire-and-forget)
+  if (process.env.CS_USER) {
+    fetch('https://rest.clicksend.com/v3/sms/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(`${process.env.CS_USER}:${process.env.CS_KEY}`),
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
-        phone: process.env.TEXTBELT_TO,
-        message: `QR ${slug} scanned ${now}`,
-        key: process.env.TEXTBELT_KEY
+        messages: [{
+          to: process.env.CS_TO,
+          body: `QR ${slug} scanned ${now}`
+        }]
       })
-    }).catch(() => {});
+    }).catch(()=>{});
   }
 
   return response;
