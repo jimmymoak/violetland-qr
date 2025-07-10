@@ -19,22 +19,30 @@ export default async function handler(req) {
     headers: { "content-type": "application/json" },
     body:   JSON.stringify({ key: `${slug}:${now}`, val: ip })
   }).catch(() => {});
-
-  // 4️⃣  ClickSend SMS (fire-and-forget)
+  
+  // 4️⃣  ClickSend SMS  — with debugging
   if (process.env.CS_USER) {
-    fetch('https://rest.clicksend.com/v3/sms/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Basic ' + btoa(`${process.env.CS_USER}:${process.env.CS_KEY}`),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messages: [{
-          to: process.env.CS_TO,
-          body: `QR ${slug} scanned ${now}`
-        }]
-      })
-    }).catch(()=>{});
+    try {
+      const smsRes = await fetch('https://rest.clicksend.com/v3/sms/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa(`${process.env.CS_USER}:${process.env.CS_KEY}`),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: [{
+            to: process.env.CS_TO,              // must include +countrycode
+            body: `QR ${slug} scanned ${now}`
+          }]
+        })
+      });
+  
+      const data = await smsRes.json();
+      console.log('ClickSend response:', JSON.stringify(data));
+  
+    } catch (e) {
+      console.error('ClickSend fetch failed:', e);
+    }
   }
 
   return response;
