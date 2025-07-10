@@ -1,27 +1,32 @@
-// app/[[...slug]]/route.js      ← create or overwrite
-export const runtime = 'edge';
+// api/[...slug].js  — Edge Function
+export const config = { runtime: 'edge' };
 
-export async function GET(request, { params }) {
-  const slug = params.slug?.join('/') || 'home';
-  const ip   = request.headers.get('x-forwarded-for') || 'unknown';
-  const now  = new Date().toISOString();
+export default async function handler(req) {
+  const slug = new URL(req.url).pathname.replace(/^\/api\//, '') || 'home';
 
-  /* 1️⃣  Log scan */
+  // 1️⃣  Redirect first (never fails)
+  const response = Response.redirect(
+    (process.env.DEST_URL || 'https://violetland.com'),
+    307
+  );
+
+  // 2️⃣  Fire-and-forget logging
+  const ip  = req.headers.get('x-forwarded-for') || 'unknown';
+  const now = new Date().toISOString();
+
   fetch('https://v0.api.vercel-kv.com/set', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ key: `${slug}:${now}`, val: ip })
-  }).catch(()=>{});
+  }).catch(() => {});
 
-  /* 2️⃣  Optional SMS / push */
   if (process.env.WEBHOOK_URL) {
     fetch(process.env.WEBHOOK_URL, {
       method: 'POST',
-      body: JSON.stringify({ slug, time: now, ip })
-    }).catch(()=>{});
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ value1: slug, value2: now, value3: ip })
+    }).catch(() => {});
   }
 
-  /* 3️⃣  Redirect — pulled from ENV so you can switch hosts later */
-  const dest = process.env.DEST_URL || 'https://violetland.com';
-  return Response.redirect(dest, 307);
+  return response;
 }
