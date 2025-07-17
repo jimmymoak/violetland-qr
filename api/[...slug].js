@@ -1,26 +1,30 @@
-// api/[...slug].js  – Edge Function
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
-  // ── 1. Parse slug, skip favicon ────────────────────────────────
+  // ── 1. Parse slug ──────────────────────────────────────────────
   const slug = new URL(req.url).pathname.replace(/^\/api\//, "");
-  if (slug.startsWith("favicon")) return new Response(null, { status: 204 });
+
+  // Skip favicon or anything not matching the pattern XX-YY-123
+  const validSlugRegex = /^[A-Z]{2}-[A-Z]{2}-\d+$/;
+  if (!validSlugRegex.test(slug)) {
+    return new Response(null, { status: 204 }); // or 400/404 if you prefer
+  }
 
   const now = new Date().toISOString();
   const ip  = req.headers.get("x-forwarded-for") || "unknown";
 
-  // ── 2. Send visitor on their way immediately ───────────────────
+  // ── 2. Redirect ────────────────────────────────────────────────
   const redirectUrl = process.env.DEST_URL || "https://violetland.com";
   const response    = Response.redirect(redirectUrl, 307);
 
-  // ── 3. Fire-and-forget: log scan (free KV) ─────────────────────
+  // ── 3. Log the scan ────────────────────────────────────────────
   fetch("https://v0.api.vercel-kv.com/set", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body:   JSON.stringify({ key: `${slug}:${now}`, val: ip })
+    body: JSON.stringify({ key: `${slug}:${now}`, val: ip })
   }).catch(() => {});
-  
-  // 4️⃣  ClickSend SMS  — with debugging
+
+  // ── 4. Send SMS via ClickSend ──────────────────────────────────
   if (process.env.CS_USER) {
     try {
       const smsRes = await fetch('https://rest.clicksend.com/v3/sms/send', {
@@ -31,15 +35,15 @@ export default async function handler(req) {
         },
         body: JSON.stringify({
           messages: [{
-            to: process.env.CS_TO,              // must include +countrycode
+            to: process.env.CS_TO,
             body: `QR ${slug} scanned ${now}`
           }]
         })
       });
-  
+
       const data = await smsRes.json();
       console.log('ClickSend response:', JSON.stringify(data));
-  
+
     } catch (e) {
       console.error('ClickSend fetch failed:', e);
     }
